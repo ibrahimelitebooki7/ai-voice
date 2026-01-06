@@ -1,0 +1,19 @@
+name = "ai-voice-agent-backend"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Variables (will be set via secrets)
+[vars]
+RETELL_AGENT_ID = "your-agent-id-here"  # Will override with secret
+
+# Environment configurations
+[env.production]
+workers_dev = true
+
+# Uncomment for custom domain
+# route = "voice-api.yourdomain.com/*"
+# zone_id = "your-zone-id"
+
+[env.development]
+workers_dev = true
