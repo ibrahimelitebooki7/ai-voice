@@ -1,0 +1,15 @@
+{
+  "name": "ai-voice-agent-backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "logs": "wrangler tail",
+    "secret:set": "wrangler secret put",
+    "test": "curl https://ai-voice.ibrahimelitebooki7.workers.dev//health"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
