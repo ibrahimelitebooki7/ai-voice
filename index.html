@@ -101,9 +101,9 @@
     </div>
 
     <script>
-       // ⚙️ CONFIGURATION - UPDATED WITH YOUR ACTUAL URL
+       // ⚙️ CONFIGURATION - FIXED URL
 const CONFIG = {
-    WORKER_URL: 'https://ai-voice.ibrahimelitebooki7.workers.dev/', // WRONG - trailing slash
+    WORKER_URL: 'https://ai-voice.ibrahimelitebooki7.workers.dev',
     AI_NAME: 'AI Assistant'
 };
 
@@ -134,30 +134,39 @@ const elements = {
 
 // 🚀 INITIALIZE
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('AI Voice Agent ready - Frontend: ai-voice-dml.pages.dev');
+    console.log('AI Voice Agent initialized');
+    console.log('Frontend URL: https://ai-voice-dml.pages.dev');
     console.log('Backend URL:', CONFIG.WORKER_URL);
+    
+    // Test connection immediately
+    testConnection();
     
     if (typeof Retell === 'undefined') {
         showError('Retell SDK not loaded. Please refresh.');
-        return;
     }
-    
-    // Test backend connection on load
-    testBackendConnection();
     
     setupEventListeners();
 });
 
-// Test if backend is reachable
-async function testBackendConnection() {
+// Test backend connection
+async function testConnection() {
     try {
+        updateStatus('Testing connection...', 'connecting');
         const response = await fetch(`${CONFIG.WORKER_URL}/health`);
-        const data = await response.json();
-        console.log('Backend status:', data);
-        updateStatus('Backend connected', 'success');
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Backend is online:', data);
+            updateStatus('Backend connected', 'success');
+            return true;
+        } else {
+            throw new Error(`Backend returned ${response.status}`);
+        }
     } catch (error) {
-        console.warn('Backend test failed:', error);
-        updateStatus('Backend connection failed', 'warning');
+        console.error('❌ Backend connection failed:', error);
+        updateStatus('Backend offline - Check worker URL', 'error');
+        showError('Cannot connect to backend. Make sure worker is deployed.');
+        return false;
     }
 }
 
@@ -178,22 +187,34 @@ function setupEventListeners() {
     });
 }
 
-// 📞 START CALL (WITH YOUR BACKEND)
+// 📞 START CALL (WITH BETTER ERROR HANDLING)
 async function startCall() {
     try {
         updateUI('starting');
+        
+        // First, test backend connection
+        const isBackendOnline = await testConnection();
+        if (!isBackendOnline) {
+            showError('Backend is not available');
+            resetUI();
+            return;
+        }
+        
+        // Request microphone permission
         const hasPermission = await requestMicrophone();
         if (!hasPermission) {
             resetUI();
             return;
         }
         
-        updateStatus('Connecting to AI...', 'connecting');
+        updateStatus('Creating call...', 'connecting');
         
-        // Log the request
-        console.log('Making request to:', `${CONFIG.WORKER_URL}/api/create-call`);
+        console.log('📡 Making request to:', `${CONFIG.WORKER_URL}/api/create-call`);
         
-        // Call YOUR Cloudflare Worker
+        // Call backend with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
         const response = await fetch(`${CONFIG.WORKER_URL}/api/create-call`, {
             method: 'POST',
             headers: { 
@@ -203,27 +224,40 @@ async function startCall() {
             body: JSON.stringify({ 
                 phone_number: '+15551234567',
                 timestamp: new Date().toISOString()
-            })
+            }),
+            signal: controller.signal
         });
         
-        console.log('Response status:', response.status);
+        clearTimeout(timeoutId);
+        
+        console.log('📥 Response status:', response.status, response.statusText);
         
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Backend error:', errorText);
+            let errorText = 'Unknown error';
+            try {
+                errorText = await response.text();
+                console.error('Backend error response:', errorText);
+            } catch (e) {
+                console.error('Could not read error response');
+            }
+            
             throw new Error(`Backend error ${response.status}: ${errorText}`);
         }
         
         const callData = await response.json();
-        console.log('Call data received:', callData);
+        console.log('✅ Call data received:', callData);
         
         if (!callData.success) {
             throw new Error(callData.error || 'Failed to create call');
         }
         
-        updateStatus('Initializing voice...', 'connecting');
+        if (!callData.call_id || !callData.sdp_offer) {
+            throw new Error('Invalid response from backend');
+        }
         
-        // Initialize Retell client with the call data
+        updateStatus('Initializing voice connection...', 'connecting');
+        
+        // Initialize Retell client
         state.retellClient = new Retell.WebClient({
             callId: callData.call_id,
             sdpOffer: callData.sdp_offer,
@@ -232,15 +266,24 @@ async function startCall() {
         });
         
         setupRetellListeners();
+        
         await state.retellClient.startCall();
         
         updateUI('active');
         startTimer();
-        addMessage('ai', 'Connected! How can I help you today? Speak naturally and I will respond.');
+        addMessage('ai', '✅ Connected! You can now speak naturally to the AI.');
         
     } catch (error) {
-        console.error('Start call error:', error);
-        showError(`Failed: ${error.message}`);
+        console.error('❌ Start call error:', error);
+        
+        let errorMessage = error.message;
+        if (error.name === 'AbortError') {
+            errorMessage = 'Request timeout - backend is not responding';
+        } else if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Cannot connect to backend. Check if worker is running.';
+        }
+        
+        showError(errorMessage);
         resetUI();
     }
 }
@@ -250,28 +293,28 @@ function setupRetellListeners() {
     if (!state.retellClient) return;
     
     state.retellClient.on("call_started", () => {
-        console.log('Retell call started');
+        console.log('🎉 Retell call started');
         updateStatus('Connected - Speak now!', 'active');
     });
     
     state.retellClient.on("update", (update) => {
-        console.log('Retell update:', update);
         if (update.transcript) {
+            console.log('AI:', update.transcript);
             addMessage('ai', update.transcript);
         }
     });
     
     state.retellClient.on("user_speech", (speech) => {
-        console.log('User speech:', speech);
         if (speech.transcript) {
+            console.log('User:', speech.transcript);
             addMessage('user', speech.transcript);
         }
     });
     
     state.retellClient.on("call_ended", () => {
-        console.log('Retell call ended');
+        console.log('Call ended');
         updateStatus('Call completed', 'inactive');
-        addMessage('system', 'Call ended. Thank you for using our AI voice agent!');
+        addMessage('system', 'Call ended. Thank you!');
         stopTimer();
         setTimeout(resetUI, 2000);
     });
@@ -345,17 +388,11 @@ function updateStatus(text, type = 'info') {
     elements.statusText.textContent = text;
     elements.statusDot.className = 'status-dot';
     
-    if (type === 'active') {
-        elements.statusDot.classList.add('active');
-    } else if (type === 'connecting') {
-        elements.statusDot.classList.add('connecting');
-    } else if (type === 'error') {
-        elements.statusDot.classList.add('error');
-    } else if (type === 'success') {
-        elements.statusDot.classList.add('active');
-    } else if (type === 'warning') {
-        elements.statusDot.classList.add('connecting');
-    }
+    if (type === 'active') elements.statusDot.classList.add('active');
+    else if (type === 'connecting') elements.statusDot.classList.add('connecting');
+    else if (type === 'error') elements.statusDot.classList.add('error');
+    else if (type === 'success') elements.statusDot.classList.add('active');
+    else if (type === 'warning') elements.statusDot.classList.add('connecting');
 }
 
 function addMessage(sender, text) {
@@ -367,8 +404,7 @@ function addMessage(sender, text) {
     
     const time = new Date().toLocaleTimeString([], { 
         hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
+        minute: '2-digit'
     });
     
     messageDiv.innerHTML = `
@@ -430,8 +466,7 @@ async function requestMicrophone() {
             audio: {
                 echoCancellation: true,
                 noiseSuppression: true,
-                autoGainControl: true,
-                sampleRate: 8000
+                autoGainControl: true
             }
         });
         
@@ -441,14 +476,15 @@ async function requestMicrophone() {
         return true;
     } catch (error) {
         console.error('Microphone permission error:', error);
-        showError('Microphone permission required. Please allow access.');
+        showError('Microphone permission required. Please allow access and try again.');
         return false;
     }
 }
 
 function showError(message) {
+    console.error('UI Error:', message);
     updateStatus(`Error: ${message}`, 'error');
-    addMessage('system', `Error: ${message}`);
+    addMessage('system', `⚠️ ${message}`);
     
     setTimeout(() => {
         if (!state.isCallActive) {
@@ -463,7 +499,7 @@ window.VoiceAgent = {
     end: endCall,
     mute: toggleMute,
     hold: toggleHold,
-    getBackendUrl: () => CONFIG.WORKER_URL
+    testConnection: testConnection
 };
     </script>
 </body>
