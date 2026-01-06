@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Agent</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/retell-browser-sdk@1.2.3/dist/retell.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .container { width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .voice-card { width: 100%; max-width: 500px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); border-radius: 30px; padding: 40px; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.2); text-align: center; }
+        .header { margin-bottom: 40px; }
+        .logo { width: 80px; height: 80px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 36px; color: white; box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3); }
+        .title { font-size: 32px; font-weight: 800; color: #1f2937; margin-bottom: 10px; }
+        .subtitle { color: #6b7280; font-size: 16px; }
+        .call-btn { width: 100%; padding: 24px; background: linear-gradient(135deg, #10b981, #34d399); color: white; border: none; border-radius: 20px; font-size: 20px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 15px; transition: all 0.3s ease; margin-bottom: 30px; box-shadow: 0 15px 30px rgba(16, 185, 129, 0.3); }
+        .call-btn:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(16, 185, 129, 0.4); }
+        .call-btn:active { transform: translateY(-2px); }
+        .call-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+        .status { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 25px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #9ca3af; }
+        .status-dot.active { background: #10b981; animation: pulse 1.5s infinite; }
+        .status-dot.connecting { background: #f59e0b; animation: pulse 1s infinite; }
+        .status-dot.error { background: #ef4444; }
+        .status-text { font-weight: 600; font-size: 18px; color: #1f2937; }
+        .timer { font-family: 'Courier New', monospace; font-size: 42px; font-weight: 700; color: #6366f1; margin: 20px 0 30px; letter-spacing: 2px; }
+        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 30px; opacity: 0; transform: translateY(20px); transition: all 0.3s ease; }
+        .controls.visible { opacity: 1; transform: translateY(0); }
+        .control { padding: 16px; border: 2px solid #e5e7eb; background: white; border-radius: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .control:hover { border-color: #6366f1; color: #6366f1; transform: translateY(-3px); }
+        .control.danger { border-color: #ef4444; color: #ef4444; }
+        .control.danger:hover { background: #ef4444; color: white; }
+        .transcript { background: #f9fafb; border-radius: 20px; padding: 25px; margin-top: 30px; height: 200px; overflow-y: auto; border: 2px solid #e5e7eb; text-align: left; }
+        .transcript-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e5e7eb; }
+        .transcript-title { font-weight: 700; font-size: 18px; color: #1f2937; display: flex; align-items: center; gap: 10px; }
+        .message-count { font-size: 14px; font-weight: 600; color: #6b7280; background: white; padding: 4px 12px; border-radius: 20px; }
+        .messages { display: flex; flex-direction: column; gap: 15px; }
+        .message { padding: 15px; border-radius: 15px; animation: slideIn 0.3s ease; }
+        .message.ai { background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; margin-right: 20px; }
+        .message.user { background: rgba(99, 102, 241, 0.1); border-left: 4px solid #6366f1; margin-left: 20px; }
+        .message-system { background: rgba(107, 114, 128, 0.1); border-left: 4px solid #6b7280; text-align: center; font-style: italic; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 600px) { .voice-card { padding: 30px 20px; } .title { font-size: 28px; } .call-btn { font-size: 18px; padding: 20px; } .timer { font-size: 36px; } .controls { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="voice-card">
+            <div class="header">
+                <div class="logo"><i class="fas fa-robot"></i></div>
+                <h1 class="title">AI Voice Agent</h1>
+                <p class="subtitle">Powered by Retell AI & Cloudflare</p>
+            </div>
+            
+            <button class="call-btn" id="startBtn">
+                <i class="fas fa-microphone"></i>
+                <span>Start AI Conversation</span>
+            </button>
+            
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <div class="status-text" id="statusText">Ready to connect</div>
+            </div>
+            
+            <div class="timer" id="timer">00:00</div>
+            
+            <div class="controls" id="controls">
+                <button class="control" id="muteBtn">
+                    <i class="fas fa-microphone"></i>
+                    <span>Mute</span>
+                </button>
+                <button class="control" id="holdBtn">
+                    <i class="fas fa-pause"></i>
+                    <span>Hold</span>
+                </button>
+                <button class="control danger" id="endBtn">
+                    <i class="fas fa-phone-slash"></i>
+                    <span>End Call</span>
+                </button>
+            </div>
+            
+            <div class="transcript" id="transcript">
+                <div class="transcript-header">
+                    <div class="transcript-title">
+                        <i class="fas fa-comments"></i>
+                        <span>Live Conversation</span>
+                    </div>
+                    <div class="message-count" id="messageCount">1 message</div>
+                </div>
+                <div class="messages" id="messages">
+                    <div class="message ai">Hello! Click the green button to start talking with me.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ⚙️ CONFIGURATION - UPDATE THIS URL AFTER DEPLOYMENT!
+        const CONFIG = {
+            WORKER_URL: 'https://YOUR-WORKER-URL.workers.dev', // ⬅️ CHANGE THIS AFTER DEPLOYMENT
+            AI_NAME: 'AI Assistant'
+        };
+        
+        // 🎯 STATE
+        let state = {
+            retellClient: null,
+            isCallActive: false,
+            isMuted: false,
+            isOnHold: false,
+            messageCount: 1,
+            callStartTime: null,
+            timerInterval: null
+        };
+        
+        // 📱 DOM ELEMENTS
+        const elements = {
+            startBtn: document.getElementById('startBtn'),
+            statusDot: document.getElementById('statusDot'),
+            statusText: document.getElementById('statusText'),
+            timer: document.getElementById('timer'),
+            controls: document.getElementById('controls'),
+            messages: document.getElementById('messages'),
+            messageCount: document.getElementById('messageCount'),
+            muteBtn: document.getElementById('muteBtn'),
+            holdBtn: document.getElementById('holdBtn'),
+            endBtn: document.getElementById('endBtn')
+        };
+        
+        // 🚀 INITIALIZE
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('AI Voice Agent ready');
+            if (typeof Retell === 'undefined') showError('Voice SDK not loaded');
+            setupEventListeners();
+        });
+        
+        // 🎮 EVENT LISTENERS
+        function setupEventListeners() {
+            elements.startBtn.addEventListener('click', startCall);
+            elements.muteBtn.addEventListener('click', toggleMute);
+            elements.holdBtn.addEventListener('click', toggleHold);
+            elements.endBtn.addEventListener('click', endCall);
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' && !state.isCallActive) { e.preventDefault(); startCall(); }
+                if (e.code === 'Escape' && state.isCallActive) endCall();
+                if (e.code === 'KeyM' && state.isCallActive) toggleMute();
+            });
+        }
+        
+        // 📞 START CALL (WITH REAL BACKEND)
+        async function startCall() {
+            try {
+                updateUI('starting');
+                const hasPermission = await requestMicrophone();
+                if (!hasPermission) { resetUI(); return; }
+                
+                updateStatus('Connecting to AI...', 'connecting');
+                
+                // Call YOUR Cloudflare Worker
+                const response = await fetch(`${CONFIG.WORKER_URL}/api/create-call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_number: '+15551234567' })
+                });
+                
+                if (!response.ok) throw new Error(`Backend error: ${response.status}`);
+                const callData = await response.json();
+                if (!callData.success) throw new Error(callData.error);
+                
+                updateStatus('Initializing...', 'connecting');
+                state.retellClient = new Retell.WebClient({
+                    callId: callData.call_id,
+                    sdpOffer: callData.sdp_offer,
+                    sampleRate: 8000,
+                    enableUpdate: true
+                });
+                
+                setupRetellListeners();
+                await state.retellClient.startCall();
+                updateUI('active');
+                startTimer();
+                addMessage('ai', 'Connected! How can I help you today?');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`Failed: ${error.message}`);
+                resetUI();
+            }
+        }
+        
+        // 🎧 RETELL LISTENERS
+        function setupRetellListeners() {
+            if (!state.retellClient) return;
+            
+            state.retellClient.on("call_started", () => {
+                console.log('Call started');
+                updateStatus('Connected - Speak now!', 'active');
+            });
+            
+            state.retellClient.on("update", (update) => {
+                if (update.transcript) addMessage('ai', update.transcript);
+            });
+            
+            state.retellClient.on("user_speech", (speech) => {
+                if (speech.transcript) addMessage('user', speech.transcript);
+            });
+            
+            state.retellClient.on("call_ended", () => {
+                console.log('Call ended');
+                updateStatus('Call completed', 'inactive');
+                addMessage('system', 'Call ended. Thank you!');
+                stopTimer();
+                setTimeout(resetUI, 2000);
+            });
+            
+            state.retellClient.on("error", (error) => {
+                console.error('Retell error:', error);
+                showError(`Voice error: ${error.message}`);
+                stopTimer();
+                setTimeout(resetUI, 2000);
+            });
+        }
+        
+        // 🎛️ CONTROL FUNCTIONS
+        function toggleMute() {
+            if (!state.retellClient || !state.isCallActive) return;
+            state.isMuted = !state.isMuted;
+            state.retellClient.mute(state.isMuted);
+            elements.muteBtn.innerHTML = state.isMuted 
+                ? '<i class="fas fa-microphone-slash"></i><span>Unmute</span>'
+                : '<i class="fas fa-microphone"></i><span>Mute</span>';
+            elements.muteBtn.classList.toggle('danger', state.isMuted);
+            updateStatus(state.isMuted ? 'Mic muted' : 'Mic active', 'info');
+        }
+        
+        function toggleHold() {
+            if (!state.retellClient || !state.isCallActive) return;
+            state.isOnHold = !state.isOnHold;
+            state.retellClient.hold(state.isOnHold);
+            elements.holdBtn.innerHTML = state.isOnHold
+                ? '<i class="fas fa-play"></i><span>Resume</span>'
+                : '<i class="fas fa-pause"></i><span>Hold</span>';
+            elements.holdBtn.classList.toggle('danger', state.isOnHold);
+            updateStatus(state.isOnHold ? 'On hold' : 'Active', state.isOnHold ? 'warning' : 'active');
+        }
+        
+        function endCall() {
+            if (state.retellClient && state.isCallActive) state.retellClient.endCall();
+            resetUI();
+        }
+        
+        // 🎨 UI FUNCTIONS
+        function updateUI(stateName) {
+            switch(stateName) {
+                case 'starting':
+                    elements.startBtn.disabled = true;
+                    elements.startBtn.innerHTML = '<span class="loading"></span> Connecting...';
+                    elements.controls.classList.remove('visible');
+                    state.isCallActive = false;
+                    break;
+                case 'active':
+                    elements.startBtn.style.display = 'none';
+                    elements.controls.classList.add('visible');
+                    state.isCallActive = true;
+                    break;
+                case 'inactive':
+                    elements.controls.classList.remove('visible');
+                    state.isCallActive = false;
+                    break;
+            }
+        }
+        
+        function updateStatus(text, type = 'info') {
+            elements.statusText.textContent = text;
+            elements.statusDot.className = 'status-dot';
+            if (type === 'active') elements.statusDot.classList.add('active');
+            else if (type === 'connecting') elements.statusDot.classList.add('connecting');
+            else if (type === 'error') elements.statusDot.classList.add('error');
+        }
+        
+        function addMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            const senderName = sender === 'ai' ? CONFIG.AI_NAME : sender === 'user' ? 'You' : 'System';
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            messageDiv.innerHTML = `<div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;"><strong>${senderName}</strong><span style="color: #6b7280;">${time}</span></div><div>${text}</div>`;
+            elements.messages.appendChild(messageDiv);
+            elements.messages.scrollTop = elements.messages.scrollHeight;
+            state.messageCount++;
+            elements.messageCount.textContent = `${state.messageCount} messages`;
+        }
+        
+        function startTimer() {
+            state.callStartTime = new Date();
+            state.timerInterval = setInterval(() => {
+                const now = new Date();
+                const diff = Math.floor((now - state.callStartTime) / 1000);
+                const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
+                const seconds = (diff % 60).toString().padStart(2, '0');
+                elements.timer.textContent = `${minutes}:${seconds}`;
+            }, 1000);
+        }
+        
+        function stopTimer() {
+            if (state.timerInterval) {
+                clearInterval(state.timerInterval);
+                state.timerInterval = null;
+            }
+        }
+        
+        function resetUI() {
+            elements.startBtn.disabled = false;
+            elements.startBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Start AI Conversation</span>';
+            elements.startBtn.style.display = 'flex';
+            elements.controls.classList.remove('visible');
+            elements.muteBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Mute</span>';
+            elements.holdBtn.innerHTML = '<i class="fas fa-pause"></i><span>Hold</span>';
+            elements.muteBtn.classList.remove('danger');
+            elements.holdBtn.classList.remove('danger');
+            updateStatus('Ready to connect', 'info');
+            elements.timer.textContent = '00:00';
+            state.retellClient = null;
+            state.isMuted = false;
+            state.isOnHold = false;
+            state.isCallActive = false;
+            stopTimer();
+        }
+        
+        async function requestMicrophone() {
+            try {
+                updateStatus('Requesting microphone...', 'connecting');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                });
+                stream.getTracks().forEach(track => track.stop());
+                updateStatus('Microphone ready', 'success');
+                return true;
+            } catch (error) {
+                console.error('Microphone error:', error);
+                showError('Microphone permission required');
+                return false;
+            }
+        }
+        
+        function showError(message) {
+            updateStatus(`Error: ${message}`, 'error');
+            addMessage('system', `Error: ${message}`);
+            setTimeout(() => { if (!state.isCallActive) resetUI(); }, 3000);
+        }
+        
+        // 🌐 GLOBAL EXPORT
+        window.VoiceAgent = { start: startCall, end: endCall, mute: toggleMute, hold: toggleHold };
+    </script>
+</body>
+</html>
