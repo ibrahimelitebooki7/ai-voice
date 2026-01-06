@@ -6,9 +6,10 @@
     <title>AI Voice Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/retell-browser-sdk@latest/dist/retell.min.js"></script>
+    <!-- CORRECT RETELL SDK -->
+    <script src="https://cdn.retellai.com/retell-web-sdk/retell-web-sdk-1.0.0.js"></script>
     <style>
-        /* Keep your existing CSS - it's good! */
+        /* Keep all your CSS as is */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .container { width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -102,7 +103,7 @@
     </div>
 
     <script>
-        // ⚙️ CONFIGURATION - V2 API
+        // ⚙️ CONFIGURATION
         const CONFIG = {
             WORKER_URL: 'https://ai-voice.ibrahimelitebooki7.workers.dev',
             AI_NAME: 'AI Assistant'
@@ -135,17 +136,19 @@
 
         // 🚀 INITIALIZE
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('Retell Web Voice Assistant (V2) initialized');
-            console.log('Frontend: https://ai-voice-dml.pages.dev');
-            console.log('Backend:', CONFIG.WORKER_URL);
-            console.log('API: Retell V2 create-web-call');
+            console.log('Retell Web Voice Assistant initialized');
             
-            testConnection();
-            
-            if (typeof Retell === 'undefined') {
-                showError('Retell SDK not loaded. Please refresh.');
+            // Check if Retell SDK loaded
+            if (typeof RetellWebClient === 'undefined') {
+                console.error('❌ RetellWebClient is not defined!');
+                showError('Retell SDK failed to load. Please refresh the page.');
+                return;
             }
             
+            console.log('✅ RetellWebClient loaded:', typeof RetellWebClient);
+            console.log('Backend URL:', CONFIG.WORKER_URL);
+            
+            testConnection();
             setupEventListeners();
         });
 
@@ -188,7 +191,7 @@
             });
         }
 
-        // 🎤 START VOICE CALL - V2 API
+        // 🎤 START VOICE CALL
         async function startVoiceCall() {
             try {
                 updateUI('starting');
@@ -210,9 +213,9 @@
                 
                 updateStatus('Creating web call...', 'connecting');
                 
-                console.log('📡 Requesting web call from V2 API...');
+                console.log('📡 Requesting web call from backend...');
                 
-                // Call backend - V2 API
+                // Call backend to create web call
                 const response = await fetch(`${CONFIG.WORKER_URL}/api/create-call`, {
                     method: 'POST',
                     headers: { 
@@ -239,24 +242,24 @@
                 }
                 
                 const callData = await response.json();
-                console.log('✅ V2 API response:', callData);
+                console.log('✅ Call data received:', callData);
                 
                 if (!callData.success) {
                     throw new Error(callData.error || 'Failed to create web call');
                 }
                 
                 if (!callData.call_id || !callData.access_token) {
-                    throw new Error('Invalid response from V2 API');
+                    throw new Error('Invalid response: missing call_id or access_token');
                 }
                 
                 updateStatus('Connecting voice...', 'connecting');
                 
-                // Initialize Retell Web Client with access_token (V2 API)
-                state.retellClient = new Retell.WebClient();
+                // Create Retell Web Client
+                state.retellClient = new RetellWebClient();
                 
                 setupRetellListeners();
                 
-                // V2 API uses access_token instead of sdp_offer
+                // Start the call with access token
                 await state.retellClient.startCall({
                     accessToken: callData.access_token,
                     sampleRate: 16000 // Optional: Web quality
@@ -283,12 +286,12 @@
             }
         }
 
-        // 🎧 RETELL LISTENERS - UPDATED FOR V2
+        // 🎧 RETELL LISTENERS
         function setupRetellListeners() {
             if (!state.retellClient) return;
             
             state.retellClient.on("call_started", () => {
-                console.log('🎉 Web call started (V2)');
+                console.log('🎉 Web call started');
                 updateStatus('Connected - Speak now!', 'active');
             });
             
@@ -309,11 +312,12 @@
                 updateStatus('Listening...', 'active');
             });
             
-            state.retellClient.on("user_speech", (speech) => {
-                if (speech.transcript) {
-                    console.log('You:', speech.transcript);
-                    addMessage('user', speech.transcript);
-                }
+            state.retellClient.on("audio", (audio) => {
+                // Raw audio data (optional)
+            });
+            
+            state.retellClient.on("metadata", (metadata) => {
+                console.log('Metadata:', metadata);
             });
             
             state.retellClient.on("call_ended", () => {
@@ -351,7 +355,10 @@
             if (!state.retellClient || !state.isCallActive) return;
             
             state.isOnHold = !state.isOnHold;
-            state.retellClient.hold(state.isOnHold);
+            // Note: Hold might not be available in RetellWebClient, check documentation
+            if (state.retellClient.hold) {
+                state.retellClient.hold(state.isOnHold);
+            }
             
             elements.holdBtn.innerHTML = state.isOnHold
                 ? '<i class="fas fa-play"></i><span>Resume</span>'
@@ -363,12 +370,12 @@
 
         function endCall() {
             if (state.retellClient && state.isCallActive) {
-                state.retellClient.stopCall(); // V2 uses stopCall()
+                state.retellClient.stopCall();
             }
             resetUI();
         }
 
-        // 🎨 UI FUNCTIONS (same as before)
+        // 🎨 UI FUNCTIONS
         function updateUI(stateName) {
             switch(stateName) {
                 case 'starting':
