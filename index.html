@@ -3,334 +3,534 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Assistant</title>
+    <title>Retell AI Voice Assistant</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/retell-client-js-sdk@latest/dist/retell-web-client.umd.js"></script>
     <style>
+        /* Your existing CSS - keep it exactly as is */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100vh; display: flex; justify-content: center; align-items: center; }
-        .container { width: 100%; max-width: 500px; padding: 20px; }
-        .card { background: white; border-radius: 20px; padding: 40px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
-        .title { font-size: 28px; font-weight: 700; margin-bottom: 10px; text-align: center; }
-        .subtitle { color: #666; text-align: center; margin-bottom: 30px; }
-        .btn { width: 100%; padding: 16px; background: #10b981; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; }
-        .btn:hover { background: #0da271; }
-        .btn:disabled { opacity: 0.7; cursor: not-allowed; }
-        .status { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; justify-content: center; }
-        .dot { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
-        .dot.active { background: #10b981; animation: pulse 1.5s infinite; }
-        .dot.connecting { background: #f59e0b; animation: pulse 1s infinite; }
-        .timer { font-size: 32px; font-weight: 700; text-align: center; margin: 20px 0; font-family: monospace; }
-        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
-        .control-btn { padding: 12px; border: 2px solid #e5e7eb; background: white; border-radius: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 5px; }
-        .control-btn:hover { border-color: #6366f1; }
-        .transcript { background: #f9fafb; border-radius: 10px; padding: 20px; margin-top: 20px; height: 200px; overflow-y: auto; }
-        .message { padding: 10px; margin: 5px 0; border-radius: 8px; }
-        .ai-message { background: #d1fae5; border-left: 4px solid #10b981; }
-        .user-message { background: #e0e7ff; border-left: 4px solid #6366f1; }
-        .error-message { background: #fee2e2; border-left: 4px solid #ef4444; }
+        html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .container { width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .voice-card { width: 100%; max-width: 500px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); border-radius: 30px; padding: 40px; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.2); text-align: center; }
+        .header { margin-bottom: 40px; }
+        .logo { width: 80px; height: 80px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 36px; color: white; box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3); }
+        .title { font-size: 32px; font-weight: 800; color: #1f2937; margin-bottom: 10px; }
+        .subtitle { color: #6b7280; font-size: 16px; }
+        .call-btn { width: 100%; padding: 24px; background: linear-gradient(135deg, #10b981, #34d399); color: white; border: none; border-radius: 20px; font-size: 20px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 15px; transition: all 0.3s ease; margin-bottom: 30px; box-shadow: 0 15px 30px rgba(16, 185, 129, 0.3); }
+        .call-btn:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(16, 185, 129, 0.4); }
+        .call-btn:active { transform: translateY(-2px); }
+        .call-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+        .status { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 25px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: #9ca3af; }
+        .status-dot.active { background: #10b981; animation: pulse 1.5s infinite; }
+        .status-dot.connecting { background: #f59e0b; animation: pulse 1s infinite; }
+        .status-dot.error { background: #ef4444; }
+        .status-text { font-weight: 600; font-size: 18px; color: #1f2937; }
+        .timer { font-family: 'Courier New', monospace; font-size: 42px; font-weight: 700; color: #6366f1; margin: 20px 0 30px; letter-spacing: 2px; }
+        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 30px; opacity: 0; transform: translateY(20px); transition: all 0.3s ease; }
+        .controls.visible { opacity: 1; transform: translateY(0); }
+        .control { padding: 16px; border: 2px solid #e5e7eb; background: white; border-radius: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .control:hover { border-color: #6366f1; color: #6366f1; transform: translateY(-3px); }
+        .control.danger { border-color: #ef4444; color: #ef4444; }
+        .control.danger:hover { background: #ef4444; color: white; }
+        .transcript { background: #f9fafb; border-radius: 20px; padding: 25px; margin-top: 30px; height: 200px; overflow-y: auto; border: 2px solid #e5e7eb; text-align: left; }
+        .transcript-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e5e7eb; }
+        .transcript-title { font-weight: 700; font-size: 18px; color: #1f2937; display: flex; align-items: center; gap: 10px; }
+        .message-count { font-size: 14px; font-weight: 600; color: #6b7280; background: white; padding: 4px 12px; border-radius: 20px; }
+        .messages { display: flex; flex-direction: column; gap: 15px; }
+        .message { padding: 15px; border-radius: 15px; animation: slideIn 0.3s ease; }
+        .message.ai { background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; margin-right: 20px; }
+        .message.user { background: rgba(99, 102, 241, 0.1); border-left: 4px solid #6366f1; margin-left: 20px; }
+        .message-system { background: rgba(107, 114, 128, 0.1); border-left: 4px solid #6b7280; text-align: center; font-style: italic; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 600px) { .voice-card { padding: 30px 20px; } .title { font-size: 28px; } .call-btn { font-size: 18px; padding: 20px; } .timer { font-size: 36px; } .controls { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="card">
-            <h1 class="title">AI Voice Assistant</h1>
-            <p class="subtitle">Talk to AI directly in your browser</p>
+        <div class="voice-card">
+            <div class="header">
+                <div class="logo"><i class="fas fa-robot"></i></div>
+                <h1 class="title">Retell AI Assistant</h1>
+                <p class="subtitle">Click to start voice conversation</p>
+            </div>
             
-            <button id="startBtn" class="btn">
+            <button class="call-btn" id="startBtn">
                 <i class="fas fa-microphone"></i>
-                <span>Start Voice Chat</span>
+                <span>Start Voice Conversation</span>
             </button>
             
             <div class="status">
-                <div id="statusDot" class="dot"></div>
-                <span id="statusText">Ready to connect</span>
+                <div class="status-dot" id="statusDot"></div>
+                <div class="status-text" id="statusText">Ready to connect</div>
             </div>
             
-            <div id="timer" class="timer">00:00</div>
+            <div class="timer" id="timer">00:00</div>
             
-            <div id="controls" class="controls" style="display: none;">
-                <button id="muteBtn" class="control-btn">
+            <div class="controls" id="controls">
+                <button class="control" id="muteBtn">
                     <i class="fas fa-microphone"></i>
                     <span>Mute</span>
                 </button>
-                <button id="holdBtn" class="control-btn">
+                <button class="control" id="holdBtn">
                     <i class="fas fa-pause"></i>
                     <span>Hold</span>
                 </button>
-                <button id="endBtn" class="control-btn" style="color: #ef4444; border-color: #ef4444;">
+                <button class="control danger" id="endBtn">
                     <i class="fas fa-phone-slash"></i>
-                    <span>End</span>
+                    <span>End Call</span>
                 </button>
             </div>
             
             <div class="transcript" id="transcript">
-                <div class="message ai-message">Hello! Click "Start Voice Chat" to begin.</div>
+                <div class="transcript-header">
+                    <div class="transcript-title">
+                        <i class="fas fa-comments"></i>
+                        <span>Live Conversation</span>
+                    </div>
+                    <div class="message-count" id="messageCount">1 message</div>
+                </div>
+                <div class="messages" id="messages">
+                    <div class="message ai">Hello! Click the button above to start talking with me.</div>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Retell SDK - Load from multiple sources -->
     <script>
-        // Configuration
-        const CONFIG = {
-            WORKER_URL: 'https://ai-voice.ibrahimelitebooki7.workers.dev'
-        };
-
-        // State
-        let state = {
-            client: null,
-            isActive: false,
-            isMuted: false,
-            timer: null,
-            startTime: null
-        };
-
-        // Elements
-        const elements = {
-            startBtn: document.getElementById('startBtn'),
-            statusDot: document.getElementById('statusDot'),
-            statusText: document.getElementById('statusText'),
-            timer: document.getElementById('timer'),
-            controls: document.getElementById('controls'),
-            transcript: document.getElementById('transcript'),
-            muteBtn: document.getElementById('muteBtn'),
-            endBtn: document.getElementById('endBtn')
-        };
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('Voice Assistant Initializing...');
+        // Function to load Retell SDK from multiple sources
+        function loadRetellSDK() {
+            const sources = [
+                'https://unpkg.com/retell-client-js-sdk@1.1.0/dist/retell-web-client.umd.js',
+                'https://cdn.jsdelivr.net/npm/retell-client-js-sdk@1.1.0/dist/retell-web-client.umd.js',
+                'https://cdn.retellai.com/retell-web-sdk/retell-web-sdk-1.0.0.js'
+            ];
             
-            // Check if SDK loaded
-            if (typeof RetellWebClient === 'undefined') {
-                console.error('RetellWebClient not found!');
-                showError('SDK failed to load. Retrying...');
-                // Try to load SDK
-                loadSDK();
-            } else {
-                console.log('✅ SDK loaded successfully');
-                setupEventListeners();
-            }
-        });
-
-        // Load SDK dynamically if not loaded
-        function loadSDK() {
-            console.log('Loading SDK dynamically...');
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/retell-client-js-sdk@latest/dist/retell-web-client.umd.js';
-            script.onload = () => {
-                console.log('✅ SDK loaded dynamically');
-                setupEventListeners();
-            };
-            script.onerror = () => {
-                console.error('❌ Failed to load SDK');
-                showError('Failed to load voice SDK. Please refresh.');
-            };
-            document.head.appendChild(script);
-        }
-
-        // Setup event listeners
-        function setupEventListeners() {
-            elements.startBtn.addEventListener('click', startCall);
-            elements.muteBtn.addEventListener('click', toggleMute);
-            elements.endBtn.addEventListener('click', endCall);
-            
-            // Keyboard shortcuts
-            document.addEventListener('keydown', (e) => {
-                if (e.code === 'Space' && !state.isActive) startCall();
-                if (e.code === 'Escape' && state.isActive) endCall();
+            return new Promise((resolve, reject) => {
+                let currentSource = 0;
+                
+                function tryLoad() {
+                    if (currentSource >= sources.length) {
+                        reject(new Error('All SDK sources failed to load'));
+                        return;
+                    }
+                    
+                    const script = document.createElement('script');
+                    script.src = sources[currentSource];
+                    
+                    script.onload = () => {
+                        console.log('✅ SDK loaded from:', sources[currentSource]);
+                        // Wait a moment for the SDK to initialize
+                        setTimeout(() => {
+                            if (typeof RetellWebClient !== 'undefined') {
+                                resolve(RetellWebClient);
+                            } else if (typeof window.RetellWebClient !== 'undefined') {
+                                resolve(window.RetellWebClient);
+                            } else {
+                                console.log('SDK loaded but RetellWebClient not found, trying next source...');
+                                currentSource++;
+                                tryLoad();
+                            }
+                        }, 100);
+                    };
+                    
+                    script.onerror = () => {
+                        console.log('Failed to load from:', sources[currentSource]);
+                        currentSource++;
+                        tryLoad();
+                    };
+                    
+                    document.head.appendChild(script);
+                }
+                
+                tryLoad();
             });
         }
-
-        // Start voice call
-        async function startCall() {
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('Initializing Retell AI Voice Assistant...');
+            
+            // Try to load SDK
             try {
-                updateUI('connecting');
-                
-                // Get microphone permission first
+                const RetellWebClient = await loadRetellSDK();
+                console.log('✅ Retell SDK loaded successfully');
+                window.RetellWebClient = RetellWebClient;
+                initializeApp();
+            } catch (error) {
+                console.error('❌ Failed to load Retell SDK:', error);
+                document.getElementById('statusText').textContent = 'Failed to load voice SDK';
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('startBtn').innerHTML = '<i class="fas fa-exclamation-triangle"></i><span>SDK Load Failed</span>';
+            }
+        });
+    </script>
+
+    <script>
+        // Main application code
+        function initializeApp() {
+            // Configuration
+            const CONFIG = {
+                WORKER_URL: 'https://ai-voice.ibrahimelitebooki7.workers.dev',
+                AI_NAME: 'AI Assistant'
+            };
+
+            // State
+            let state = {
+                retellClient: null,
+                isCallActive: false,
+                isMuted: false,
+                isOnHold: false,
+                messageCount: 1,
+                callStartTime: null,
+                timerInterval: null
+            };
+
+            // DOM Elements
+            const elements = {
+                startBtn: document.getElementById('startBtn'),
+                statusDot: document.getElementById('statusDot'),
+                statusText: document.getElementById('statusText'),
+                timer: document.getElementById('timer'),
+                controls: document.getElementById('controls'),
+                messages: document.getElementById('messages'),
+                messageCount: document.getElementById('messageCount'),
+                muteBtn: document.getElementById('muteBtn'),
+                holdBtn: document.getElementById('holdBtn'),
+                endBtn: document.getElementById('endBtn')
+            };
+
+            // Test connection
+            async function testConnection() {
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    stream.getTracks().forEach(track => track.stop());
+                    updateStatus('Testing connection...', 'connecting');
+                    const response = await fetch(`${CONFIG.WORKER_URL}/health`);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('✅ Backend is online:', data);
+                        updateStatus('Ready to connect', 'success');
+                        return true;
+                    } else {
+                        throw new Error(`Backend returned ${response.status}`);
+                    }
                 } catch (error) {
-                    showError('Microphone access required');
-                    resetUI();
-                    return;
+                    console.error('❌ Backend connection failed:', error);
+                    updateStatus('Backend offline', 'error');
+                    showError('Cannot connect to backend');
+                    return false;
                 }
+            }
+
+            // Setup event listeners
+            function setupEventListeners() {
+                elements.startBtn.addEventListener('click', startVoiceCall);
+                elements.muteBtn.addEventListener('click', toggleMute);
+                elements.holdBtn.addEventListener('click', toggleHold);
+                elements.endBtn.addEventListener('click', endCall);
                 
-                // Create web call via backend
-                const response = await fetch(`${CONFIG.WORKER_URL}/api/create-call`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space' && !state.isCallActive) {
+                        e.preventDefault();
+                        startVoiceCall();
+                    }
+                    if (e.code === 'Escape' && state.isCallActive) endCall();
+                    if (e.code === 'KeyM' && state.isCallActive) toggleMute();
                 });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to create call');
-                }
-                
-                const data = await response.json();
-                
-                if (!data.success) {
-                    throw new Error(data.error);
-                }
-                
-                // Initialize Retell client
-                state.client = new RetellWebClient();
-                
-                // Setup event listeners
-                state.client.on("call_started", () => {
-                    console.log('Call started');
+            }
+
+            // Start voice call
+            async function startVoiceCall() {
+                try {
+                    updateUI('starting');
+                    
+                    // Test backend connection
+                    const isBackendOnline = await testConnection();
+                    if (!isBackendOnline) {
+                        showError('Backend is not available');
+                        resetUI();
+                        return;
+                    }
+                    
+                    // Request microphone permission
+                    const hasPermission = await requestMicrophone();
+                    if (!hasPermission) {
+                        resetUI();
+                        return;
+                    }
+                    
+                    updateStatus('Creating call...', 'connecting');
+                    
+                    // Create web call via backend
+                    const response = await fetch(`${CONFIG.WORKER_URL}/api/create-call`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({})
+                    });
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`Backend error: ${errorText}`);
+                    }
+                    
+                    const callData = await response.json();
+                    console.log('Call data:', callData);
+                    
+                    if (!callData.success) {
+                        throw new Error(callData.error || 'Failed to create call');
+                    }
+                    
+                    if (!callData.access_token) {
+                        throw new Error('No access token received');
+                    }
+                    
+                    updateStatus('Connecting...', 'connecting');
+                    
+                    // Initialize Retell client
+                    state.retellClient = new RetellWebClient();
+                    
+                    // Setup event listeners
+                    setupRetellListeners();
+                    
+                    // Start the call
+                    await state.retellClient.startCall({
+                        accessToken: callData.access_token,
+                        sampleRate: 16000
+                    });
+                    
                     updateUI('active');
                     startTimer();
-                    addMessage('AI', 'Connected! Speak now.');
+                    addMessage('ai', '✅ Connected! You can speak now.');
+                    
+                } catch (error) {
+                    console.error('Start call error:', error);
+                    showError(error.message);
+                    resetUI();
+                }
+            }
+
+            // Setup Retell listeners
+            function setupRetellListeners() {
+                if (!state.retellClient) return;
+                
+                state.retellClient.on("call_started", () => {
+                    console.log('Call started');
+                    updateStatus('Connected - Speak now!', 'active');
                 });
                 
-                state.client.on("update", (update) => {
+                state.retellClient.on("update", (update) => {
                     if (update.transcript) {
-                        addMessage('AI', update.transcript);
+                        console.log('AI:', update.transcript);
+                        addMessage('ai', update.transcript);
                     }
                 });
                 
-                state.client.on("agent_start_talking", () => {
-                    console.log('Agent speaking');
+                state.retellClient.on("agent_start_talking", () => {
+                    console.log('Agent started talking');
+                    updateStatus('AI is speaking...', 'info');
                 });
                 
-                state.client.on("agent_stop_talking", () => {
-                    console.log('Agent stopped');
+                state.retellClient.on("agent_stop_talking", () => {
+                    console.log('Agent stopped talking');
+                    updateStatus('Listening...', 'active');
                 });
                 
-                state.client.on("call_ended", () => {
+                state.retellClient.on("call_ended", () => {
                     console.log('Call ended');
-                    updateUI('ended');
+                    updateStatus('Call completed', 'inactive');
+                    addMessage('system', 'Call ended. Thank you!');
                     stopTimer();
-                    addMessage('System', 'Call ended.');
+                    setTimeout(resetUI, 2000);
                 });
                 
-                state.client.on("error", (error) => {
-                    console.error('Call error:', error);
-                    showError(`Call error: ${error.message}`);
-                    endCall();
+                state.retellClient.on("error", (error) => {
+                    console.error('Retell error:', error);
+                    showError(`Voice error: ${error.message}`);
+                    stopTimer();
+                    setTimeout(resetUI, 2000);
                 });
+            }
+
+            // Control functions
+            function toggleMute() {
+                if (!state.retellClient || !state.isCallActive) return;
                 
-                // Start the call
-                await state.client.startCall({
-                    accessToken: data.access_token,
-                    sampleRate: 16000
-                });
+                state.isMuted = !state.isMuted;
+                if (state.retellClient.mute) {
+                    state.retellClient.mute(state.isMuted);
+                }
                 
-            } catch (error) {
-                console.error('Start call error:', error);
-                showError(error.message);
+                elements.muteBtn.innerHTML = state.isMuted 
+                    ? '<i class="fas fa-microphone-slash"></i><span>Unmute</span>'
+                    : '<i class="fas fa-microphone"></i><span>Mute</span>';
+                
+                elements.muteBtn.classList.toggle('danger', state.isMuted);
+                updateStatus(state.isMuted ? 'Mic muted' : 'Mic active', 'info');
+            }
+
+            function toggleHold() {
+                if (!state.retellClient || !state.isCallActive) return;
+                
+                state.isOnHold = !state.isOnHold;
+                if (state.retellClient.hold) {
+                    state.retellClient.hold(state.isOnHold);
+                }
+                
+                elements.holdBtn.innerHTML = state.isOnHold
+                    ? '<i class="fas fa-play"></i><span>Resume</span>'
+                    : '<i class="fas fa-pause"></i><span>Hold</span>';
+                
+                elements.holdBtn.classList.toggle('danger', state.isOnHold);
+                updateStatus(state.isOnHold ? 'On hold' : 'Active', state.isOnHold ? 'warning' : 'active');
+            }
+
+            function endCall() {
+                if (state.retellClient && state.isCallActive) {
+                    state.retellClient.stopCall();
+                }
                 resetUI();
             }
-        }
 
-        // Toggle mute
-        function toggleMute() {
-            if (!state.client || !state.isActive) return;
-            
-            state.isMuted = !state.isMuted;
-            state.client.mute(state.isMuted);
-            
-            elements.muteBtn.innerHTML = state.isMuted 
-                ? '<i class="fas fa-microphone-slash"></i><span>Unmute</span>'
-                : '<i class="fas fa-microphone"></i><span>Mute</span>';
-            
-            updateStatus(state.isMuted ? 'Microphone muted' : 'Microphone active');
-        }
-
-        // End call
-        function endCall() {
-            if (state.client && state.isActive) {
-                state.client.stopCall();
+            // UI functions
+            function updateUI(stateName) {
+                switch(stateName) {
+                    case 'starting':
+                        elements.startBtn.disabled = true;
+                        elements.startBtn.innerHTML = '<span class="loading"></span> Connecting...';
+                        elements.controls.classList.remove('visible');
+                        state.isCallActive = false;
+                        break;
+                    case 'active':
+                        elements.startBtn.style.display = 'none';
+                        elements.controls.classList.add('visible');
+                        state.isCallActive = true;
+                        break;
+                    case 'inactive':
+                        elements.controls.classList.remove('visible');
+                        state.isCallActive = false;
+                        break;
+                }
             }
-            resetUI();
-        }
 
-        // UI Functions
-        function updateUI(state) {
-            switch(state) {
-                case 'connecting':
-                    elements.startBtn.disabled = true;
-                    elements.startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
-                    updateStatus('Connecting to voice service...', 'connecting');
-                    break;
+            function updateStatus(text, type = 'info') {
+                elements.statusText.textContent = text;
+                elements.statusDot.className = 'status-dot';
+                
+                if (type === 'active') elements.statusDot.classList.add('active');
+                else if (type === 'connecting') elements.statusDot.classList.add('connecting');
+                else if (type === 'error') elements.statusDot.classList.add('error');
+                else if (type === 'success') elements.statusDot.classList.add('active');
+                else if (type === 'warning') elements.statusDot.classList.add('connecting');
+            }
+
+            function addMessage(sender, text) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                
+                const senderName = sender === 'ai' ? CONFIG.AI_NAME : 
+                                sender === 'user' ? 'You' : 'System';
+                
+                const time = new Date().toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit'
+                });
+                
+                messageDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;">
+                        <strong>${senderName}</strong>
+                        <span style="color: #6b7280;">${time}</span>
+                    </div>
+                    <div>${text}</div>
+                `;
+                
+                elements.messages.appendChild(messageDiv);
+                elements.messages.scrollTop = elements.messages.scrollHeight;
+                
+                state.messageCount++;
+                elements.messageCount.textContent = `${state.messageCount} messages`;
+            }
+
+            function startTimer() {
+                state.callStartTime = new Date();
+                state.timerInterval = setInterval(() => {
+                    const now = new Date();
+                    const diff = Math.floor((now - state.callStartTime) / 1000);
+                    const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
+                    const seconds = (diff % 60).toString().padStart(2, '0');
+                    elements.timer.textContent = `${minutes}:${seconds}`;
+                }, 1000);
+            }
+
+            function stopTimer() {
+                if (state.timerInterval) {
+                    clearInterval(state.timerInterval);
+                    state.timerInterval = null;
+                }
+            }
+
+            function resetUI() {
+                elements.startBtn.disabled = false;
+                elements.startBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Start Voice Conversation</span>';
+                elements.startBtn.style.display = 'flex';
+                elements.controls.classList.remove('visible');
+                elements.muteBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Mute</span>';
+                elements.holdBtn.innerHTML = '<i class="fas fa-pause"></i><span>Hold</span>';
+                elements.muteBtn.classList.remove('danger');
+                elements.holdBtn.classList.remove('danger');
+                updateStatus('Ready to connect', 'info');
+                elements.timer.textContent = '00:00';
+                state.retellClient = null;
+                state.isMuted = false;
+                state.isOnHold = false;
+                state.isCallActive = false;
+                stopTimer();
+            }
+
+            async function requestMicrophone() {
+                try {
+                    updateStatus('Requesting microphone...', 'connecting');
                     
-                case 'active':
-                    elements.startBtn.style.display = 'none';
-                    elements.controls.style.display = 'grid';
-                    state.isActive = true;
-                    updateStatus('Connected - Speak now!', 'active');
-                    break;
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
                     
-                case 'ended':
-                    resetUI();
-                    updateStatus('Call ended', 'inactive');
-                    break;
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    updateStatus('Microphone ready', 'success');
+                    return true;
+                } catch (error) {
+                    console.error('Microphone permission error:', error);
+                    showError('Microphone permission required');
+                    return false;
+                }
             }
-        }
 
-        function updateStatus(text, type = 'info') {
-            elements.statusText.textContent = text;
-            elements.statusDot.className = 'dot';
-            
-            if (type === 'active') elements.statusDot.classList.add('active');
-            else if (type === 'connecting') elements.statusDot.classList.add('connecting');
-            else if (type === 'error') elements.statusDot.style.background = '#ef4444';
-        }
-
-        function addMessage(sender, text) {
-            const message = document.createElement('div');
-            message.className = sender === 'AI' ? 'message ai-message' : 
-                              sender === 'You' ? 'message user-message' : 
-                              'message error-message';
-            
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            message.innerHTML = `<strong>${sender}</strong> (${time}): ${text}`;
-            
-            elements.transcript.appendChild(message);
-            elements.transcript.scrollTop = elements.transcript.scrollHeight;
-        }
-
-        function showError(message) {
-            console.error('Error:', message);
-            addMessage('System', `Error: ${message}`);
-            updateStatus(`Error: ${message}`, 'error');
-        }
-
-        function startTimer() {
-            state.startTime = new Date();
-            state.timer = setInterval(() => {
-                const now = new Date();
-                const diff = Math.floor((now - state.startTime) / 1000);
-                const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
-                const seconds = (diff % 60).toString().padStart(2, '0');
-                elements.timer.textContent = `${minutes}:${seconds}`;
-            }, 1000);
-        }
-
-        function stopTimer() {
-            if (state.timer) {
-                clearInterval(state.timer);
-                state.timer = null;
+            function showError(message) {
+                console.error('Error:', message);
+                updateStatus(`Error: ${message}`, 'error');
+                addMessage('system', `⚠️ ${message}`);
+                
+                setTimeout(() => {
+                    if (!state.isCallActive) {
+                        resetUI();
+                    }
+                }, 5000);
             }
-        }
 
-        function resetUI() {
-            elements.startBtn.disabled = false;
-            elements.startBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Start Voice Chat</span>';
-            elements.startBtn.style.display = 'flex';
-            elements.controls.style.display = 'none';
-            elements.muteBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Mute</span>';
-            updateStatus('Ready to connect', 'info');
-            elements.timer.textContent = '00:00';
-            state.client = null;
-            state.isActive = false;
-            state.isMuted = false;
-            stopTimer();
+            // Initialize
+            setupEventListeners();
+            testConnection();
         }
     </script>
 </body>
