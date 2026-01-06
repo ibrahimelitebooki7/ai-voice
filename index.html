@@ -101,260 +101,370 @@
     </div>
 
     <script>
-        // ⚙️ CONFIGURATION - UPDATE THIS URL AFTER DEPLOYMENT!
-        const CONFIG = {
-            WORKER_URL: 'https://ai-voice.ibrahimelitebooki7.workers.dev/', // ⬅️ CHANGE THIS AFTER DEPLOYMENT
-            AI_NAME: 'AI Assistant'
-        };
+       // ⚙️ CONFIGURATION - UPDATED WITH YOUR ACTUAL URL
+const CONFIG = {
+    WORKER_URL: 'https://ai-voice.ibrahimelitebooki7.workers.dev', // ⬅️ YOUR BACKEND URL
+    AI_NAME: 'AI Assistant'
+};
+
+// 🎯 STATE
+let state = {
+    retellClient: null,
+    isCallActive: false,
+    isMuted: false,
+    isOnHold: false,
+    messageCount: 1,
+    callStartTime: null,
+    timerInterval: null
+};
+
+// 📱 DOM ELEMENTS
+const elements = {
+    startBtn: document.getElementById('startBtn'),
+    statusDot: document.getElementById('statusDot'),
+    statusText: document.getElementById('statusText'),
+    timer: document.getElementById('timer'),
+    controls: document.getElementById('controls'),
+    messages: document.getElementById('messages'),
+    messageCount: document.getElementById('messageCount'),
+    muteBtn: document.getElementById('muteBtn'),
+    holdBtn: document.getElementById('holdBtn'),
+    endBtn: document.getElementById('endBtn')
+};
+
+// 🚀 INITIALIZE
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('AI Voice Agent ready - Frontend: ai-voice-dml.pages.dev');
+    console.log('Backend URL:', CONFIG.WORKER_URL);
+    
+    if (typeof Retell === 'undefined') {
+        showError('Retell SDK not loaded. Please refresh.');
+        return;
+    }
+    
+    // Test backend connection on load
+    testBackendConnection();
+    
+    setupEventListeners();
+});
+
+// Test if backend is reachable
+async function testBackendConnection() {
+    try {
+        const response = await fetch(`${CONFIG.WORKER_URL}/health`);
+        const data = await response.json();
+        console.log('Backend status:', data);
+        updateStatus('Backend connected', 'success');
+    } catch (error) {
+        console.warn('Backend test failed:', error);
+        updateStatus('Backend connection failed', 'warning');
+    }
+}
+
+// 🎮 EVENT LISTENERS
+function setupEventListeners() {
+    elements.startBtn.addEventListener('click', startCall);
+    elements.muteBtn.addEventListener('click', toggleMute);
+    elements.holdBtn.addEventListener('click', toggleHold);
+    elements.endBtn.addEventListener('click', endCall);
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && !state.isCallActive) {
+            e.preventDefault();
+            startCall();
+        }
+        if (e.code === 'Escape' && state.isCallActive) endCall();
+        if (e.code === 'KeyM' && state.isCallActive) toggleMute();
+    });
+}
+
+// 📞 START CALL (WITH YOUR BACKEND)
+async function startCall() {
+    try {
+        updateUI('starting');
+        const hasPermission = await requestMicrophone();
+        if (!hasPermission) {
+            resetUI();
+            return;
+        }
         
-        // 🎯 STATE
-        let state = {
-            retellClient: null,
-            isCallActive: false,
-            isMuted: false,
-            isOnHold: false,
-            messageCount: 1,
-            callStartTime: null,
-            timerInterval: null
-        };
+        updateStatus('Connecting to AI...', 'connecting');
         
-        // 📱 DOM ELEMENTS
-        const elements = {
-            startBtn: document.getElementById('startBtn'),
-            statusDot: document.getElementById('statusDot'),
-            statusText: document.getElementById('statusText'),
-            timer: document.getElementById('timer'),
-            controls: document.getElementById('controls'),
-            messages: document.getElementById('messages'),
-            messageCount: document.getElementById('messageCount'),
-            muteBtn: document.getElementById('muteBtn'),
-            holdBtn: document.getElementById('holdBtn'),
-            endBtn: document.getElementById('endBtn')
-        };
+        // Log the request
+        console.log('Making request to:', `${CONFIG.WORKER_URL}/api/create-call`);
         
-        // 🚀 INITIALIZE
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('AI Voice Agent ready');
-            if (typeof Retell === 'undefined') showError('Voice SDK not loaded');
-            setupEventListeners();
+        // Call YOUR Cloudflare Worker
+        const response = await fetch(`${CONFIG.WORKER_URL}/api/create-call`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                phone_number: '+15551234567',
+                timestamp: new Date().toISOString()
+            })
         });
         
-        // 🎮 EVENT LISTENERS
-        function setupEventListeners() {
-            elements.startBtn.addEventListener('click', startCall);
-            elements.muteBtn.addEventListener('click', toggleMute);
-            elements.holdBtn.addEventListener('click', toggleHold);
-            elements.endBtn.addEventListener('click', endCall);
-            document.addEventListener('keydown', (e) => {
-                if (e.code === 'Space' && !state.isCallActive) { e.preventDefault(); startCall(); }
-                if (e.code === 'Escape' && state.isCallActive) endCall();
-                if (e.code === 'KeyM' && state.isCallActive) toggleMute();
-            });
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Backend error:', errorText);
+            throw new Error(`Backend error ${response.status}: ${errorText}`);
         }
         
-        // 📞 START CALL (WITH REAL BACKEND)
-        async function startCall() {
-            try {
-                updateUI('starting');
-                const hasPermission = await requestMicrophone();
-                if (!hasPermission) { resetUI(); return; }
-                
-                updateStatus('Connecting to AI...', 'connecting');
-                
-                // Call YOUR Cloudflare Worker
-                const response = await fetch(`${CONFIG.WORKER_URL}/api/create-call`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone_number: '+15551234567' })
-                });
-                
-                if (!response.ok) throw new Error(`Backend error: ${response.status}`);
-                const callData = await response.json();
-                if (!callData.success) throw new Error(callData.error);
-                
-                updateStatus('Initializing...', 'connecting');
-                state.retellClient = new Retell.WebClient({
-                    callId: callData.call_id,
-                    sdpOffer: callData.sdp_offer,
-                    sampleRate: 8000,
-                    enableUpdate: true
-                });
-                
-                setupRetellListeners();
-                await state.retellClient.startCall();
-                updateUI('active');
-                startTimer();
-                addMessage('ai', 'Connected! How can I help you today?');
-                
-            } catch (error) {
-                console.error('Error:', error);
-                showError(`Failed: ${error.message}`);
-                resetUI();
+        const callData = await response.json();
+        console.log('Call data received:', callData);
+        
+        if (!callData.success) {
+            throw new Error(callData.error || 'Failed to create call');
+        }
+        
+        updateStatus('Initializing voice...', 'connecting');
+        
+        // Initialize Retell client with the call data
+        state.retellClient = new Retell.WebClient({
+            callId: callData.call_id,
+            sdpOffer: callData.sdp_offer,
+            sampleRate: 8000,
+            enableUpdate: true
+        });
+        
+        setupRetellListeners();
+        await state.retellClient.startCall();
+        
+        updateUI('active');
+        startTimer();
+        addMessage('ai', 'Connected! How can I help you today? Speak naturally and I will respond.');
+        
+    } catch (error) {
+        console.error('Start call error:', error);
+        showError(`Failed: ${error.message}`);
+        resetUI();
+    }
+}
+
+// 🎧 RETELL LISTENERS
+function setupRetellListeners() {
+    if (!state.retellClient) return;
+    
+    state.retellClient.on("call_started", () => {
+        console.log('Retell call started');
+        updateStatus('Connected - Speak now!', 'active');
+    });
+    
+    state.retellClient.on("update", (update) => {
+        console.log('Retell update:', update);
+        if (update.transcript) {
+            addMessage('ai', update.transcript);
+        }
+    });
+    
+    state.retellClient.on("user_speech", (speech) => {
+        console.log('User speech:', speech);
+        if (speech.transcript) {
+            addMessage('user', speech.transcript);
+        }
+    });
+    
+    state.retellClient.on("call_ended", () => {
+        console.log('Retell call ended');
+        updateStatus('Call completed', 'inactive');
+        addMessage('system', 'Call ended. Thank you for using our AI voice agent!');
+        stopTimer();
+        setTimeout(resetUI, 2000);
+    });
+    
+    state.retellClient.on("error", (error) => {
+        console.error('Retell client error:', error);
+        showError(`Voice error: ${error.message}`);
+        stopTimer();
+        setTimeout(resetUI, 2000);
+    });
+}
+
+// 🎛️ CONTROL FUNCTIONS
+function toggleMute() {
+    if (!state.retellClient || !state.isCallActive) return;
+    
+    state.isMuted = !state.isMuted;
+    state.retellClient.mute(state.isMuted);
+    
+    elements.muteBtn.innerHTML = state.isMuted 
+        ? '<i class="fas fa-microphone-slash"></i><span>Unmute</span>'
+        : '<i class="fas fa-microphone"></i><span>Mute</span>';
+    
+    elements.muteBtn.classList.toggle('danger', state.isMuted);
+    updateStatus(state.isMuted ? 'Mic muted' : 'Mic active', 'info');
+}
+
+function toggleHold() {
+    if (!state.retellClient || !state.isCallActive) return;
+    
+    state.isOnHold = !state.isOnHold;
+    state.retellClient.hold(state.isOnHold);
+    
+    elements.holdBtn.innerHTML = state.isOnHold
+        ? '<i class="fas fa-play"></i><span>Resume</span>'
+        : '<i class="fas fa-pause"></i><span>Hold</span>';
+    
+    elements.holdBtn.classList.toggle('danger', state.isOnHold);
+    updateStatus(state.isOnHold ? 'On hold' : 'Active', state.isOnHold ? 'warning' : 'active');
+}
+
+function endCall() {
+    if (state.retellClient && state.isCallActive) {
+        state.retellClient.endCall();
+    }
+    resetUI();
+}
+
+// 🎨 UI FUNCTIONS
+function updateUI(stateName) {
+    switch(stateName) {
+        case 'starting':
+            elements.startBtn.disabled = true;
+            elements.startBtn.innerHTML = '<span class="loading"></span> Connecting...';
+            elements.controls.classList.remove('visible');
+            state.isCallActive = false;
+            break;
+        case 'active':
+            elements.startBtn.style.display = 'none';
+            elements.controls.classList.add('visible');
+            state.isCallActive = true;
+            break;
+        case 'inactive':
+            elements.controls.classList.remove('visible');
+            state.isCallActive = false;
+            break;
+    }
+}
+
+function updateStatus(text, type = 'info') {
+    elements.statusText.textContent = text;
+    elements.statusDot.className = 'status-dot';
+    
+    if (type === 'active') {
+        elements.statusDot.classList.add('active');
+    } else if (type === 'connecting') {
+        elements.statusDot.classList.add('connecting');
+    } else if (type === 'error') {
+        elements.statusDot.classList.add('error');
+    } else if (type === 'success') {
+        elements.statusDot.classList.add('active');
+    } else if (type === 'warning') {
+        elements.statusDot.classList.add('connecting');
+    }
+}
+
+function addMessage(sender, text) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${sender}`;
+    
+    const senderName = sender === 'ai' ? CONFIG.AI_NAME : 
+                      sender === 'user' ? 'You' : 'System';
+    
+    const time = new Date().toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    
+    messageDiv.innerHTML = `
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;">
+            <strong>${senderName}</strong>
+            <span style="color: #6b7280;">${time}</span>
+        </div>
+        <div>${text}</div>
+    `;
+    
+    elements.messages.appendChild(messageDiv);
+    elements.messages.scrollTop = elements.messages.scrollHeight;
+    
+    state.messageCount++;
+    elements.messageCount.textContent = `${state.messageCount} messages`;
+}
+
+function startTimer() {
+    state.callStartTime = new Date();
+    state.timerInterval = setInterval(() => {
+        const now = new Date();
+        const diff = Math.floor((now - state.callStartTime) / 1000);
+        const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
+        const seconds = (diff % 60).toString().padStart(2, '0');
+        elements.timer.textContent = `${minutes}:${seconds}`;
+    }, 1000);
+}
+
+function stopTimer() {
+    if (state.timerInterval) {
+        clearInterval(state.timerInterval);
+        state.timerInterval = null;
+    }
+}
+
+function resetUI() {
+    elements.startBtn.disabled = false;
+    elements.startBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Start AI Conversation</span>';
+    elements.startBtn.style.display = 'flex';
+    elements.controls.classList.remove('visible');
+    elements.muteBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Mute</span>';
+    elements.holdBtn.innerHTML = '<i class="fas fa-pause"></i><span>Hold</span>';
+    elements.muteBtn.classList.remove('danger');
+    elements.holdBtn.classList.remove('danger');
+    updateStatus('Ready to connect', 'info');
+    elements.timer.textContent = '00:00';
+    state.retellClient = null;
+    state.isMuted = false;
+    state.isOnHold = false;
+    state.isCallActive = false;
+    stopTimer();
+}
+
+async function requestMicrophone() {
+    try {
+        updateStatus('Requesting microphone access...', 'connecting');
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 8000
             }
-        }
+        });
         
-        // 🎧 RETELL LISTENERS
-        function setupRetellListeners() {
-            if (!state.retellClient) return;
-            
-            state.retellClient.on("call_started", () => {
-                console.log('Call started');
-                updateStatus('Connected - Speak now!', 'active');
-            });
-            
-            state.retellClient.on("update", (update) => {
-                if (update.transcript) addMessage('ai', update.transcript);
-            });
-            
-            state.retellClient.on("user_speech", (speech) => {
-                if (speech.transcript) addMessage('user', speech.transcript);
-            });
-            
-            state.retellClient.on("call_ended", () => {
-                console.log('Call ended');
-                updateStatus('Call completed', 'inactive');
-                addMessage('system', 'Call ended. Thank you!');
-                stopTimer();
-                setTimeout(resetUI, 2000);
-            });
-            
-            state.retellClient.on("error", (error) => {
-                console.error('Retell error:', error);
-                showError(`Voice error: ${error.message}`);
-                stopTimer();
-                setTimeout(resetUI, 2000);
-            });
-        }
+        stream.getTracks().forEach(track => track.stop());
         
-        // 🎛️ CONTROL FUNCTIONS
-        function toggleMute() {
-            if (!state.retellClient || !state.isCallActive) return;
-            state.isMuted = !state.isMuted;
-            state.retellClient.mute(state.isMuted);
-            elements.muteBtn.innerHTML = state.isMuted 
-                ? '<i class="fas fa-microphone-slash"></i><span>Unmute</span>'
-                : '<i class="fas fa-microphone"></i><span>Mute</span>';
-            elements.muteBtn.classList.toggle('danger', state.isMuted);
-            updateStatus(state.isMuted ? 'Mic muted' : 'Mic active', 'info');
-        }
-        
-        function toggleHold() {
-            if (!state.retellClient || !state.isCallActive) return;
-            state.isOnHold = !state.isOnHold;
-            state.retellClient.hold(state.isOnHold);
-            elements.holdBtn.innerHTML = state.isOnHold
-                ? '<i class="fas fa-play"></i><span>Resume</span>'
-                : '<i class="fas fa-pause"></i><span>Hold</span>';
-            elements.holdBtn.classList.toggle('danger', state.isOnHold);
-            updateStatus(state.isOnHold ? 'On hold' : 'Active', state.isOnHold ? 'warning' : 'active');
-        }
-        
-        function endCall() {
-            if (state.retellClient && state.isCallActive) state.retellClient.endCall();
+        updateStatus('Microphone ready', 'success');
+        return true;
+    } catch (error) {
+        console.error('Microphone permission error:', error);
+        showError('Microphone permission required. Please allow access.');
+        return false;
+    }
+}
+
+function showError(message) {
+    updateStatus(`Error: ${message}`, 'error');
+    addMessage('system', `Error: ${message}`);
+    
+    setTimeout(() => {
+        if (!state.isCallActive) {
             resetUI();
         }
-        
-        // 🎨 UI FUNCTIONS
-        function updateUI(stateName) {
-            switch(stateName) {
-                case 'starting':
-                    elements.startBtn.disabled = true;
-                    elements.startBtn.innerHTML = '<span class="loading"></span> Connecting...';
-                    elements.controls.classList.remove('visible');
-                    state.isCallActive = false;
-                    break;
-                case 'active':
-                    elements.startBtn.style.display = 'none';
-                    elements.controls.classList.add('visible');
-                    state.isCallActive = true;
-                    break;
-                case 'inactive':
-                    elements.controls.classList.remove('visible');
-                    state.isCallActive = false;
-                    break;
-            }
-        }
-        
-        function updateStatus(text, type = 'info') {
-            elements.statusText.textContent = text;
-            elements.statusDot.className = 'status-dot';
-            if (type === 'active') elements.statusDot.classList.add('active');
-            else if (type === 'connecting') elements.statusDot.classList.add('connecting');
-            else if (type === 'error') elements.statusDot.classList.add('error');
-        }
-        
-        function addMessage(sender, text) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
-            const senderName = sender === 'ai' ? CONFIG.AI_NAME : sender === 'user' ? 'You' : 'System';
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            messageDiv.innerHTML = `<div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px;"><strong>${senderName}</strong><span style="color: #6b7280;">${time}</span></div><div>${text}</div>`;
-            elements.messages.appendChild(messageDiv);
-            elements.messages.scrollTop = elements.messages.scrollHeight;
-            state.messageCount++;
-            elements.messageCount.textContent = `${state.messageCount} messages`;
-        }
-        
-        function startTimer() {
-            state.callStartTime = new Date();
-            state.timerInterval = setInterval(() => {
-                const now = new Date();
-                const diff = Math.floor((now - state.callStartTime) / 1000);
-                const minutes = Math.floor(diff / 60).toString().padStart(2, '0');
-                const seconds = (diff % 60).toString().padStart(2, '0');
-                elements.timer.textContent = `${minutes}:${seconds}`;
-            }, 1000);
-        }
-        
-        function stopTimer() {
-            if (state.timerInterval) {
-                clearInterval(state.timerInterval);
-                state.timerInterval = null;
-            }
-        }
-        
-        function resetUI() {
-            elements.startBtn.disabled = false;
-            elements.startBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Start AI Conversation</span>';
-            elements.startBtn.style.display = 'flex';
-            elements.controls.classList.remove('visible');
-            elements.muteBtn.innerHTML = '<i class="fas fa-microphone"></i><span>Mute</span>';
-            elements.holdBtn.innerHTML = '<i class="fas fa-pause"></i><span>Hold</span>';
-            elements.muteBtn.classList.remove('danger');
-            elements.holdBtn.classList.remove('danger');
-            updateStatus('Ready to connect', 'info');
-            elements.timer.textContent = '00:00';
-            state.retellClient = null;
-            state.isMuted = false;
-            state.isOnHold = false;
-            state.isCallActive = false;
-            stopTimer();
-        }
-        
-        async function requestMicrophone() {
-            try {
-                updateStatus('Requesting microphone...', 'connecting');
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-                });
-                stream.getTracks().forEach(track => track.stop());
-                updateStatus('Microphone ready', 'success');
-                return true;
-            } catch (error) {
-                console.error('Microphone error:', error);
-                showError('Microphone permission required');
-                return false;
-            }
-        }
-        
-        function showError(message) {
-            updateStatus(`Error: ${message}`, 'error');
-            addMessage('system', `Error: ${message}`);
-            setTimeout(() => { if (!state.isCallActive) resetUI(); }, 3000);
-        }
-        
-        // 🌐 GLOBAL EXPORT
-        window.VoiceAgent = { start: startCall, end: endCall, mute: toggleMute, hold: toggleHold };
+    }, 5000);
+}
+
+// 🌐 GLOBAL EXPORT
+window.VoiceAgent = {
+    start: startCall,
+    end: endCall,
+    mute: toggleMute,
+    hold: toggleHold,
+    getBackendUrl: () => CONFIG.WORKER_URL
+};
     </script>
 </body>
 </html>
