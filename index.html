@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/retell-browser-sdk@latest/dist/retell.min.js"></script>
     <style>
+        /* Keep your existing CSS - it's good! */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .container { width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -55,7 +56,7 @@
             <div class="header">
                 <div class="logo"><i class="fas fa-robot"></i></div>
                 <h1 class="title">AI Voice Assistant</h1>
-                <p class="subtitle">Browser Voice Chat - No Phone Required</p>
+                <p class="subtitle">Browser Voice Chat - Powered by Retell V2 API</p>
             </div>
             
             <button class="call-btn" id="startBtn">
@@ -94,18 +95,17 @@
                     <div class="message-count" id="messageCount">1 message</div>
                 </div>
                 <div class="messages" id="messages">
-                    <div class="message ai">Hello! Click the green button to start a voice conversation with me. I'm running directly in your browser!</div>
+                    <div class="message ai">Hello! Click "Start Voice Chat" to begin a conversation with me directly in your browser!</div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // ⚙️ CONFIGURATION - WEB VOICE ONLY
+        // ⚙️ CONFIGURATION - V2 API
         const CONFIG = {
             WORKER_URL: 'https://ai-voice.ibrahimelitebooki7.workers.dev',
-            AI_NAME: 'AI Assistant',
-            SAMPLE_RATE: 16000 // WEB QUALITY (not 8000 for phone)
+            AI_NAME: 'AI Assistant'
         };
 
         // 🎯 STATE
@@ -135,12 +135,11 @@
 
         // 🚀 INITIALIZE
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('Web Voice Assistant initialized');
-            console.log('Frontend URL: https://ai-voice-dml.pages.dev');
-            console.log('Backend URL:', CONFIG.WORKER_URL);
-            console.log('Mode: Browser Voice Chat (No Phone)');
+            console.log('Retell Web Voice Assistant (V2) initialized');
+            console.log('Frontend: https://ai-voice-dml.pages.dev');
+            console.log('Backend:', CONFIG.WORKER_URL);
+            console.log('API: Retell V2 create-web-call');
             
-            // Test connection immediately
             testConnection();
             
             if (typeof Retell === 'undefined') {
@@ -189,12 +188,12 @@
             });
         }
 
-        // 🎤 START WEB VOICE CALL (NO PHONE!)
+        // 🎤 START VOICE CALL - V2 API
         async function startVoiceCall() {
             try {
                 updateUI('starting');
                 
-                // First, test backend connection
+                // Test backend connection
                 const isBackendOnline = await testConnection();
                 if (!isBackendOnline) {
                     showError('Backend is not available');
@@ -209,15 +208,11 @@
                     return;
                 }
                 
-                updateStatus('Starting voice chat...', 'connecting');
+                updateStatus('Creating web call...', 'connecting');
                 
-                console.log('📡 Requesting WEB VOICE call from:', `${CONFIG.WORKER_URL}/api/create-call`);
+                console.log('📡 Requesting web call from V2 API...');
                 
-                // Call backend - NO PHONE NUMBER!
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
-                
-                // IMPORTANT: No phone_number in request!
+                // Call backend - V2 API
                 const response = await fetch(`${CONFIG.WORKER_URL}/api/create-call`, {
                     method: 'POST',
                     headers: { 
@@ -225,14 +220,9 @@
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({ 
-                        // NO phone_number field!
-                        timestamp: new Date().toISOString(),
-                        sample_rate: CONFIG.SAMPLE_RATE
-                    }),
-                    signal: controller.signal
+                        timestamp: new Date().toISOString()
+                    })
                 });
-                
-                clearTimeout(timeoutId);
                 
                 console.log('📥 Response status:', response.status);
                 
@@ -249,42 +239,43 @@
                 }
                 
                 const callData = await response.json();
-                console.log('✅ Web voice call data received:', callData);
+                console.log('✅ V2 API response:', callData);
                 
                 if (!callData.success) {
-                    throw new Error(callData.error || 'Failed to create web voice call');
+                    throw new Error(callData.error || 'Failed to create web call');
                 }
                 
-                if (!callData.call_id) {
-                    throw new Error('No call ID returned from backend');
+                if (!callData.call_id || !callData.access_token) {
+                    throw new Error('Invalid response from V2 API');
                 }
                 
                 updateStatus('Connecting voice...', 'connecting');
                 
-                // Initialize Retell client for WEB VOICE
-                state.retellClient = new Retell.WebClient({
-                    callId: callData.call_id,
-                    sdpOffer: callData.sdp_offer || "auto",
-                    sampleRate: CONFIG.SAMPLE_RATE, // 16000 for web
-                    enableUpdate: true
-                });
+                // Initialize Retell Web Client with access_token (V2 API)
+                state.retellClient = new Retell.WebClient();
                 
                 setupRetellListeners();
                 
-                await state.retellClient.startCall();
+                // V2 API uses access_token instead of sdp_offer
+                await state.retellClient.startCall({
+                    accessToken: callData.access_token,
+                    sampleRate: 16000 // Optional: Web quality
+                });
                 
                 updateUI('active');
                 startTimer();
-                addMessage('ai', '✅ Connected! Speak naturally to have a conversation.');
+                addMessage('ai', '✅ Connected! You can speak naturally now.');
                 
             } catch (error) {
                 console.error('❌ Start voice call error:', error);
                 
                 let errorMessage = error.message;
                 if (error.name === 'AbortError') {
-                    errorMessage = 'Request timeout - backend is not responding';
+                    errorMessage = 'Request timeout';
                 } else if (error.message.includes('Failed to fetch')) {
-                    errorMessage = 'Cannot connect to backend. Check if worker is running.';
+                    errorMessage = 'Cannot connect to backend';
+                } else if (error.message.includes('accessToken')) {
+                    errorMessage = 'Invalid access token from Retell API';
                 }
                 
                 showError(errorMessage);
@@ -292,12 +283,12 @@
             }
         }
 
-        // 🎧 RETELL LISTENERS
+        // 🎧 RETELL LISTENERS - UPDATED FOR V2
         function setupRetellListeners() {
             if (!state.retellClient) return;
             
             state.retellClient.on("call_started", () => {
-                console.log('🎉 Web voice call started');
+                console.log('🎉 Web call started (V2)');
                 updateStatus('Connected - Speak now!', 'active');
             });
             
@@ -308,6 +299,16 @@
                 }
             });
             
+            state.retellClient.on("agent_start_talking", () => {
+                console.log('Agent started talking');
+                updateStatus('AI is speaking...', 'info');
+            });
+            
+            state.retellClient.on("agent_stop_talking", () => {
+                console.log('Agent stopped talking');
+                updateStatus('Listening...', 'active');
+            });
+            
             state.retellClient.on("user_speech", (speech) => {
                 if (speech.transcript) {
                     console.log('You:', speech.transcript);
@@ -316,7 +317,7 @@
             });
             
             state.retellClient.on("call_ended", () => {
-                console.log('Voice call ended');
+                console.log('Web call ended');
                 updateStatus('Conversation ended', 'inactive');
                 addMessage('system', 'Conversation ended. Click the button to start again!');
                 stopTimer();
@@ -362,12 +363,12 @@
 
         function endCall() {
             if (state.retellClient && state.isCallActive) {
-                state.retellClient.endCall();
+                state.retellClient.stopCall(); // V2 uses stopCall()
             }
             resetUI();
         }
 
-        // 🎨 UI FUNCTIONS
+        // 🎨 UI FUNCTIONS (same as before)
         function updateUI(stateName) {
             switch(stateName) {
                 case 'starting':
@@ -464,14 +465,13 @@
 
         async function requestMicrophone() {
             try {
-                updateStatus('Requesting microphone access...', 'connecting');
+                updateStatus('Requesting microphone...', 'connecting');
                 
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     audio: {
                         echoCancellation: true,
                         noiseSuppression: true,
-                        autoGainControl: true,
-                        sampleRate: CONFIG.SAMPLE_RATE
+                        autoGainControl: true
                     }
                 });
                 
